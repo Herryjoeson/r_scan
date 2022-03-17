@@ -12,9 +12,11 @@ final MethodChannel _channel = const MethodChannel('$_scanType/method');
 
 Future<List<RScanCameraDescription>> availableRScanCameras() async {
   try {
-    final List<Map<dynamic, dynamic>> cameras = await (_channel
-            .invokeListMethod<Map<dynamic, dynamic>>('availableCameras')
-        as Future<List<Map<dynamic, dynamic>>>);
+    final List<Map<dynamic, dynamic>>? cameras =
+        await _channel.invokeListMethod<Map<dynamic, dynamic>>('availableCameras');
+    if (cameras == null) {
+      return List.empty();
+    }
     return cameras.map((Map<dynamic, dynamic> camera) {
       return RScanCameraDescription(
         name: camera['name'],
@@ -44,19 +46,18 @@ class RScanCameraController extends ValueNotifier<RScanCameraValue> {
     _creatingCompleter = Completer<void>();
 
     try {
-      final Map<dynamic, dynamic?> reply =
-          await (_channel.invokeMapMethod('initialize', <String, dynamic>{
+      final Map<dynamic, dynamic>? reply = await _channel.invokeMapMethod('initialize', <String, dynamic>{
         'cameraName': description.name,
         'resolutionPreset': _serializeResolutionPreset(resolutionPreset),
-      }) as FutureOr<Map<dynamic, dynamic?>>);
-      _textureId = reply['textureId'];
-      value = value.copyWith(
-          isInitialized: true,
-          previewSize: Size(reply['previewWidth'].toDouble(),
-              reply['previewHeight'].toDouble()));
-      _resultSubscription = EventChannel('${_scanType}_$_textureId/event')
-          .receiveBroadcastStream()
-          .listen(_handleResult);
+      });
+      if (reply != null) {
+        _textureId = reply['textureId'];
+        value = value.copyWith(
+            isInitialized: true,
+            previewSize: Size(reply['previewWidth'].toDouble(), reply['previewHeight'].toDouble()));
+        _resultSubscription =
+            EventChannel('${_scanType}_$_textureId/event').receiveBroadcastStream().listen(_handleResult);
+      }
     } on PlatformException catch (e) {
       //当发生权限问题的异常时会抛出
       throw RScanCameraException(e.code, e.message);
